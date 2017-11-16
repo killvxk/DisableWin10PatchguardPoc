@@ -82,7 +82,7 @@ namespace ddk::patchguard
 	{
 		for (auto i = SIZE_T(0); i < _Size; i++)
 		{
-			//下面攻击密文pg
+			//下面找密文pg
 			if ((i + 0x800 + 0x10) < _Size)
 			{
 				auto TempKey1 = *(ULONG_PTR*)((PUCHAR)BaseAddress + i) ^ PreKey1;
