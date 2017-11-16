@@ -1,2 +1,2 @@
 # DisableWin10PatchguardPoc
-POC CODE
+only pseudo-code here
