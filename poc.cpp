@@ -7,6 +7,7 @@ namespace ddk::patchguard
 	DWORD64 Key1 = 0;
 	DWORD64 Key2 = 0;
 	ULONG_PTR g_ExQueueWorkItem = 0;
+	PVOID g_FreePg = nullptr;
 	void get_key()
 	{
 		PVOID lpNtMem = nullptr;
@@ -49,7 +50,8 @@ namespace ddk::patchguard
 			for (auto i=0;i<ScanSize;i++)
 			{
 				if (*(DWORD64 *)(&pScan[i]) == PreKey1
-					&&*(DWORD64 *)(&pScan[i + 8]) == PreKey2)
+					&&*(DWORD64 *)(&pScan[i + 8]) == PreKey2
+					&&ScanSize>i+0x800+0x10)
 				{
 					Key1 = *(DWORD64 *)(&pScan[i + 0x800]);
 					Key2 = *(DWORD64 *)(&pScan[i + 0x800 + 8]);
@@ -82,7 +84,7 @@ namespace ddk::patchguard
 	{
 		for (auto i = SIZE_T(0); i < _Size; i++)
 		{
-			//下面找密文pg
+			//下面攻击密文pg
 			if ((i + 0x800 + 0x10) < _Size)
 			{
 				auto TempKey1 = *(ULONG_PTR*)((PUCHAR)BaseAddress + i) ^ PreKey1;
@@ -93,7 +95,7 @@ namespace ddk::patchguard
 					LOG_DEBUG("ExecPatchGuard address:%p    TempKey1:%p    TempKey2:%p\n", (PUCHAR)BaseAddress + i, TempKey1, TempKey2);
 					UCHAR Code[0x10] = { 0 };
 					memcpy(Code, "\x48\xB8\x21\x43\x65\x87\x78\x56\x34\x12\xFF\xE0\x90\x90\x90\x90", 0x10);
-					*(ULONG_PTR*)(Code + 0x2) = (ULONG_PTR)NewExecPatchGuard;
+					*(ULONG_PTR*)(Code + 0x2) = (ULONG_PTR)g_FreePg;
 					*(ULONG_PTR*)((PUCHAR)BaseAddress + i) = *(ULONG_PTR*)Code ^ TempKey1;
 					*(ULONG_PTR*)((PUCHAR)BaseAddress + i + 0x8) = *(ULONG_PTR*)(Code + 0x8) ^ TempKey2;
 				}
@@ -110,6 +112,17 @@ namespace ddk::patchguard
 		{
 			LOG_DEBUG("Find Key Failed\r\n");
 			return;
+		}
+		if (!g_FreePg)
+		{
+			g_FreePg = ExAllocatePoolWithTag(NonPagedPool, 0x10, 'fktp');
+			if (!g_FreePg)
+			{
+				LOG_DEBUG("Allocate Free Pg Failed\r\n");
+				return;
+			}
+			UCHAR _FreePg[] = { 0x48,0x83,0xC4,0x30,0xC3 };
+			RtlCopyMemory(g_FreePg, _FreePg, sizeof(_FreePg));
 		}
 		LOG_DEBUG("Key1=%p Key2=%p\r\n", Key1, Key2);
 		g_ExQueueWorkItem = (ULONG_PTR)ddk::util::get_proc_address("ExQueueWorkItem");
