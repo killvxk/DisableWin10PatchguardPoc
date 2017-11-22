@@ -33,7 +33,6 @@ namespace ddk::patchguard
 		auto dos_header = reinterpret_cast<PIMAGE_DOS_HEADER>(lpNtMem);
 		auto pNtHeader = reinterpret_cast<PIMAGE_NT_HEADERS>((PUCHAR)lpNtMem + dos_header->e_lfanew);
 		auto NumSections = pNtHeader->FileHeader.NumberOfSections;
-
 		auto pSections = reinterpret_cast<PIMAGE_SECTION_HEADER>((PUCHAR)pNtHeader + sizeof(IMAGE_NT_HEADERS));
 		auto pScan = (PUCHAR)nullptr;
 		auto ScanSize = 0;
@@ -58,9 +57,10 @@ namespace ddk::patchguard
 			for (auto i=0;i<ScanSize;i++)
 			{
 				if (*(DWORD64 *)(&pScan[i]) == PreKey1
-					&&*(DWORD64 *)(&pScan[i + 8]) == PreKey2
 					&&ScanSize>i+0x800+0x10)
 				{
+				//修复Key2在15063和部分win10上找不到的问题
+					PreKey2 = *(DWORD64 *)(&pScan[i + 8]);
 					Key1 = *(DWORD64 *)(&pScan[i + 0x800]);
 					Key2 = *(DWORD64 *)(&pScan[i + 0x800 + 8]);
 					break;
