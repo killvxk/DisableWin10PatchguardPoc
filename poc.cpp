@@ -14,10 +14,12 @@ namespace ddk::patchguard
 		auto st = ddk::util::LoadFileToMem(L"\\SystemRoot\\System32\\ntoskrnl.exe", &lpNtMem);
 		if (!NT_SUCCESS(st))
 		{
+			LOG_DEBUG("OpenFile Failed\r\n");
 			return;
 		}
 		if (!lpNtMem)
 		{
+			LOG_DEBUG("Load File Failed\r\n");
 			return;
 		}
 		auto exit1 = std::experimental::make_scope_exit([&]() {
@@ -31,7 +33,8 @@ namespace ddk::patchguard
 		auto dos_header = reinterpret_cast<PIMAGE_DOS_HEADER>(lpNtMem);
 		auto pNtHeader = reinterpret_cast<PIMAGE_NT_HEADERS>((PUCHAR)lpNtMem + dos_header->e_lfanew);
 		auto NumSections = pNtHeader->FileHeader.NumberOfSections;
-		auto pSections = IMAGE_FIRST_SECTION(pNtHeader);
+
+		auto pSections = reinterpret_cast<PIMAGE_SECTION_HEADER>((PUCHAR)pNtHeader + sizeof(IMAGE_NT_HEADERS));
 		auto pScan = (PUCHAR)nullptr;
 		auto ScanSize = 0;
 		for (auto i=0;i<NumSections;i++)
@@ -43,6 +46,11 @@ namespace ddk::patchguard
 					pSections[i].Misc.VirtualSize);
 				break;
 			}
+		}
+		if (!pScan)
+		{
+			LOG_DEBUG("Find Section Failed\r\n");
+			return;
 		}
 		//找key1，key2
 		if (pScan)
@@ -82,9 +90,18 @@ namespace ddk::patchguard
 	}
 	void PocScanPg(PVOID BaseAddress, SIZE_T _Size)
 	{
+		if (_Size==PAGE_SIZE)
+		{
+			PUCHAR pAccessPage = (PUCHAR)BaseAddress + PAGE_SIZE + 0x800;
+			if (ddk::mem_util::MmIsAccessibleAddress(pAccessPage))
+			{
+				_Size += PAGE_SIZE;
+			}
+		}
 		for (auto i = SIZE_T(0); i < _Size; i++)
 		{
 			//下面攻击密文pg
+			
 			if ((i + 0x800 + 0x10) < _Size)
 			{
 				auto TempKey1 = *(ULONG_PTR*)((PUCHAR)BaseAddress + i) ^ PreKey1;
