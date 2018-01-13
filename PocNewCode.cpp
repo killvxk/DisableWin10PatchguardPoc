@@ -2,7 +2,7 @@
 
 namespace ddk::patchguard
 {
-		DWORD64 PreKey1 = 0x4808588948c48b48ull;
+	DWORD64 PreKey1 = 0x4808588948c48b48ull;
 	DWORD64 PreKey2 = 0x5518788948107089ull;
 	DWORD64 Key1 = 0;
 	DWORD64 Key2 = 0;
