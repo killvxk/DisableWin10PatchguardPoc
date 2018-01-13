@@ -2,7 +2,7 @@
 
 namespace ddk::patchguard
 {
-	DWORD64 PreKey1 = 0x4808588948c48b48ull;
+		DWORD64 PreKey1 = 0x4808588948c48b48ull;
 	DWORD64 PreKey2 = 0x5518788948107089ull;
 	DWORD64 Key1 = 0;
 	DWORD64 Key2 = 0;
@@ -97,7 +97,7 @@ namespace ddk::patchguard
 			if (_Size == PAGE_SIZE)
 			{
 				PUCHAR pAccessPage = (PUCHAR)BaseAddress + _Size + 0x800;
-				if (ddk::mem_util::MmIsAccessibleAddress(pAccessPage))
+				if (MmIsAddressValid(pAccessPage))
 				{
 					_Size += PAGE_SIZE;
 				}
@@ -109,10 +109,10 @@ namespace ddk::patchguard
 			
 			if ((i + 0x800 + 0x10) < _Size
 				&& (ULONG_PTR)((PUCHAR)BaseAddress + i + 0x800 + 0x10) > (ULONG_PTR)BaseAddress
-				&& ddk::mem_util::MmIsAccessibleAddress(PVOID((PUCHAR)BaseAddress + i))
-				&& ddk::mem_util::MmIsAccessibleAddress(PVOID((PUCHAR)BaseAddress + i + 0x8))
-				&& ddk::mem_util::MmIsAccessibleAddress(PVOID((PUCHAR)BaseAddress + i + 0x800))
-				&& ddk::mem_util::MmIsAccessibleAddress(PVOID((PUCHAR)BaseAddress + i + 0x800 + 0x8))
+				&& MmIsAddressValid(PVOID((PUCHAR)BaseAddress + i))
+				&& MmIsAddressValid(PVOID((PUCHAR)BaseAddress + i + 0x8))
+				&& MmIsAddressValid(PVOID((PUCHAR)BaseAddress + i + 0x800))
+				&& MmIsAddressValid(PVOID((PUCHAR)BaseAddress + i + 0x800 + 0x8))
 				)
 			{
 				auto TempKey1 = *(ULONG_PTR*)((PUCHAR)BaseAddress + i) ^ PreKey1;
@@ -175,9 +175,8 @@ namespace ddk::patchguard
 				if(poolEntry.SizeInBytes>=ScanMinSize)
 				{
 					
-				//	if (ddk::mem_util::MmIsExecutableAddress(poolEntry.VirtualAddress))
+					if (MmIsAddressValid(poolEntry.VirtualAddress))
 					{
-				//		LOG_DEBUG("well\r\n");
 						if (PocScanPg(poolEntry.VirtualAddress, poolEntry.SizeInBytes, true))
 						{
 							LOG_DEBUG("Tag: %.*s, Address: 0x%p, Size: 0x%p\r\n", 4, poolEntry.Tag, poolEntry.VirtualAddress, (PVOID)poolEntry.SizeInBytes);
@@ -185,71 +184,6 @@ namespace ddk::patchguard
 					}		
 				}
 			}
-		}
-
-	}
-	void disable_pg_poc()
-	{
-		if (!Key1||!Key2)
-		{
-			get_key();
-		}
-		if (!Key1||!Key2)
-		{
-			LOG_DEBUG("Find Key Failed\r\n");
-			return;
-		}
-		if (!g_FreePg)
-		{
-			g_FreePg = ExAllocatePoolWithTag(NonPagedPool, 0x10, 'fktp');
-			if (!g_FreePg)
-			{
-				LOG_DEBUG("Allocate Free Pg Failed\r\n");
-				return;
-			}
-			UCHAR _FreePg[] = { 0x48,0x83,0xC4,0x30,0xC3 };
-			RtlCopyMemory(g_FreePg, _FreePg, sizeof(_FreePg));
-		}
-		LOG_DEBUG("Key1=%p Key2=%p\r\n", Key1, Key2);
-		g_ExQueueWorkItem = (ULONG_PTR)ddk::util::get_proc_address("ExQueueWorkItem");
-		auto PhysicalMemoryBlock = std::experimental::make_unique_resource(
-			MmGetPhysicalMemoryRanges(), &ExFreePool);
-		auto phymem = PhysicalMemoryBlock.get();
-		if (!phymem)
-		{
-			return;
-		}
-		auto NtosImage = ddk::util::get_ntos_imagebase();
-		auto i = 0;
-		while (phymem[i].NumberOfBytes.QuadPart != 0)
-		{
-			PHYSICAL_ADDRESS BaseAddress = PhysicalMemoryBlock[i].BaseAddress;
-			LARGE_INTEGER NumberOfBytes = PhysicalMemoryBlock[i].NumberOfBytes;
-			while (NumberOfBytes.QuadPart > 0)
-			{
-				auto MapAddress = MmGetVirtualForPhysical(BaseAddress);
-				auto ulAddress = reinterpret_cast<ULONG_PTR>(MapAddress);
-				SIZE_T ScanSize = PAGE_SIZE;
-				if (MapAddress
-					&& ulAddress > (ULONG_PTR)MmSystemRangeStart)
-				{
-					PVOID ImageBase = nullptr;
-					if (ddk::mem_util::MmIsExecutableAddress(MapAddress))
-					{
-						RtlPcToFileHeader(MapAddress, &ImageBase);
-						if (!ImageBase /*|| ImageBase == NtosImage*/)
-						{
-							//发现无模块的可执行内存，扫特征日BB	
-							auto pde = ddk::mem_util::UtilpAddressToPde(MapAddress);
-							auto pte = ddk::mem_util::UtilpAddressToPte(MapAddress);
-							PocScanPg(MapAddress, ScanSize);
-						}
-					}
-				}
-				BaseAddress.QuadPart += ScanSize;
-				NumberOfBytes.QuadPart -= ScanSize;
-			}
-			i++;
 		}
 	}
 }
